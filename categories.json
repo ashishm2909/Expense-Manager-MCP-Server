@@ -1,0 +1,48 @@
+{
+  "categories": [
+    {
+      "name": "Food & Dining",
+      "subcategories": ["Groceries", "Restaurants", "Coffee", "Delivery", "Snacks"]
+    },
+    {
+      "name": "Transportation",
+      "subcategories": ["Public Transit", "Fuel", "Taxi & Rideshare", "Parking", "Vehicle Maintenance"]
+    },
+    {
+      "name": "Housing",
+      "subcategories": ["Rent", "Mortgage", "Maintenance & Repairs", "Furniture", "Supplies"]
+    },
+    {
+      "name": "Utilities",
+      "subcategories": ["Electricity", "Water", "Gas", "Internet", "Mobile Phone"]
+    },
+    {
+      "name": "Entertainment",
+      "subcategories": ["Movies & Streaming", "Games", "Events & Concerts", "Hobbies", "Subscriptions"]
+    },
+    {
+      "name": "Shopping",
+      "subcategories": ["Clothing", "Electronics", "Home Goods", "Gifts"]
+    },
+    {
+      "name": "Healthcare",
+      "subcategories": ["Doctor Visits", "Pharmacy & Medications", "Dental", "Insurance", "Fitness"]
+    },
+    {
+      "name": "Education",
+      "subcategories": ["Books", "Courses & Tuition", "Supplies", "Software"]
+    },
+    {
+      "name": "Travel",
+      "subcategories": ["Flights", "Lodging", "Car Rental", "Sightseeing", "Dining"]
+    },
+    {
+      "name": "Personal Care",
+      "subcategories": ["Hair & Grooming", "Cosmetics", "Spa & Wellness"]
+    },
+    {
+      "name": "Miscellaneous",
+      "subcategories": ["Fees & Charges", "Donations", "Other"]
+    }
+  ]
+}
