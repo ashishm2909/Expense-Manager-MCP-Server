@@ -5,13 +5,13 @@ import json
 from fastmcp import FastMCP
 
 def get_db_path() -> str:
-    # 1. Custom path from environment variable (e.g., persistent volume like /data/expenses.db)
+    # 1. If an environment variable is set (e.g. persistent volume like /data/expenses.db)
     env_path = os.environ.get("EXPENSES_DB_PATH")
     if env_path:
         os.makedirs(os.path.dirname(os.path.abspath(env_path)), exist_ok=True)
         return env_path
 
-    # 2. Try application directory
+    # 2. Try the local folder (works when running locally on your Mac)
     local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expenses.db")
     try:
         with open(local_path, "a"):
@@ -20,7 +20,7 @@ def get_db_path() -> str:
     except (OSError, PermissionError):
         pass
 
-    # 3. Fallback to /tmp or system temp directory (always writable in container/cloud environments)
+    # 3. Fallback to /tmp (always writable in FastMCP Cloud / Docker)
     return os.path.join(tempfile.gettempdir(), "expenses.db")
 
 DB_PATH = get_db_path()
