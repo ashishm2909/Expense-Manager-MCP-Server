@@ -1,7 +1,9 @@
 import os
 import sqlite3
+import aiosqlite
 import tempfile
 import json
+from datetime import date as dt_date
 from fastmcp import FastMCP
 
 def get_db_path() -> str:
@@ -29,6 +31,7 @@ CATEGORIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cate
 mcp = FastMCP("ExpenseTracker")
 
 def init_db():
+    '''Synchronously ensure the expenses table exists at startup.'''
     with sqlite3.connect(DB_PATH) as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS expenses(
@@ -44,20 +47,25 @@ def init_db():
 init_db()
 
 @mcp.tool()
-def add_expense(date, amount, category, subcategory="", note=""):
-    '''Add a new expense entry to the database.'''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
+async def add_expense(amount: float, category: str, date: str = "", subcategory: str = "", note: str = ""):
+    '''Add a new expense entry to the database. Defaults date to today (YYYY-MM-DD) if omitted.'''
+    if not date:
+        date = dt_date.today().isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as c:
+        cur = await c.execute(
             "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
             (date, amount, category, subcategory, note)
         )
-        return {"status": "ok", "id": cur.lastrowid}
-    
+        await c.commit()
+        return {"status": "ok", "id": cur.lastrowid, "date": date}
+
 @mcp.tool()
-def list_expenses(start_date, end_date):
+async def list_expenses(start_date: str, end_date: str):
     '''List expense entries within an inclusive date range.'''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
+    async with aiosqlite.connect(DB_PATH) as c:
+        c.row_factory = aiosqlite.Row
+        async with c.execute(
             """
             SELECT id, date, amount, category, subcategory, note
             FROM expenses
@@ -65,16 +73,15 @@ def list_expenses(start_date, end_date):
             ORDER BY id ASC
             """,
             (start_date, end_date)
-        )
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 @mcp.tool()
-def update_expense(id, date, amount, category, subcategory="", note=""):
-
+async def update_expense(id: int, date: str, amount: float, category: str, subcategory: str = "", note: str = ""):
     '''Update an existing expense entry.'''
-    with sqlite3.connect(DB_PATH) as c:
-        c.execute(
+    async with aiosqlite.connect(DB_PATH) as c:
+        await c.execute(
             """
             UPDATE expenses
             SET date = ?,
@@ -86,45 +93,48 @@ def update_expense(id, date, amount, category, subcategory="", note=""):
             """,
             (date, amount, category, subcategory, note, id)
         )
+        await c.commit()
         return {"status": "ok", "id": id}
 
 @mcp.tool()
-def delete_expense(id):
+async def delete_expense(id: int):
     '''Delete an expense entry.'''
-    with sqlite3.connect(DB_PATH) as c:
-        c.execute(
-            """
-            DELETE FROM expenses
-            WHERE id = ?
-            """,
+    async with aiosqlite.connect(DB_PATH) as c:
+        await c.execute(
+            "DELETE FROM expenses WHERE id = ?",
             (id,)
         )
+        await c.commit()
         return {"status": "ok", "id": id}
 
 @mcp.tool()
-def get_expense(id):
+async def get_expense(id: int):
     '''Get an expense entry.'''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
+    async with aiosqlite.connect(DB_PATH) as c:
+        c.row_factory = aiosqlite.Row
+        async with c.execute(
             """
             SELECT id, date, amount, category, subcategory, note
             FROM expenses
             WHERE id = ?
             """,
             (id,)
-        )
-        cols = [d[0] for d in cur.description]
-        return dict(zip(cols, cur.fetchone()))
+        ) as cur:
+            row = await cur.fetchone()
+            if row is None:
+                return {"error": f"Expense with id {id} not found"}
+            return dict(row)
 
 @mcp.tool()
-def search_expenses(query):
+async def search_expenses(query: str):
     '''Search expenses by note.
     
     Args:
         query: The search query.
     '''
-    with sqlite3.connect(DB_PATH) as c:
-        cur = c.execute(
+    async with aiosqlite.connect(DB_PATH) as c:
+        c.row_factory = aiosqlite.Row
+        async with c.execute(
             """
             SELECT id, date, amount, category, subcategory, note
             FROM expenses
@@ -132,22 +142,20 @@ def search_expenses(query):
             ORDER BY id ASC
             """,
             (f"%{query}%",)
-        )
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
-
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 @mcp.tool()
-def summarize(start_date, end_date, category=None):
+async def summarize(start_date: str, end_date: str, category: str = None):
     '''Summarize expenses by category within an inclusive date range.'''
-    with sqlite3.connect(DB_PATH) as c:
-        query = (
-            """
+    async with aiosqlite.connect(DB_PATH) as c:
+        c.row_factory = aiosqlite.Row
+        query = """
             SELECT category, SUM(amount) AS total_amount
             FROM expenses
             WHERE date BETWEEN ? AND ?
-            """
-        )
+        """
         params = [start_date, end_date]
 
         if category:
@@ -156,10 +164,9 @@ def summarize(start_date, end_date, category=None):
 
         query += " GROUP BY category ORDER BY category ASC"
 
-        cur = c.execute(query, params)
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
-
+        async with c.execute(query, params) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 @mcp.resource("expense://categories", mime_type="application/json")
 def categories():
