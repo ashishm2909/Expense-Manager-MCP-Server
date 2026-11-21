@@ -1,9 +1,30 @@
-from fastmcp import FastMCP
 import os
 import sqlite3
+import tempfile
+import json
+from fastmcp import FastMCP
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
-CATEGORIES_PATH = os.path.join(os.path.dirname(__file__), "categories.json")
+def get_db_path() -> str:
+    # 1. Custom path from environment variable (e.g., persistent volume like /data/expenses.db)
+    env_path = os.environ.get("EXPENSES_DB_PATH")
+    if env_path:
+        os.makedirs(os.path.dirname(os.path.abspath(env_path)), exist_ok=True)
+        return env_path
+
+    # 2. Try application directory
+    local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expenses.db")
+    try:
+        with open(local_path, "a"):
+            pass
+        return local_path
+    except (OSError, PermissionError):
+        pass
+
+    # 3. Fallback to /tmp or system temp directory (always writable in container/cloud environments)
+    return os.path.join(tempfile.gettempdir(), "expenses.db")
+
+DB_PATH = get_db_path()
+CATEGORIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "categories.json")
 
 mcp = FastMCP("ExpenseTracker")
 
@@ -143,8 +164,27 @@ def summarize(start_date, end_date, category=None):
 @mcp.resource("expense://categories", mime_type="application/json")
 def categories():
     # Read fresh each time so you can edit the file without restarting
-    with open(CATEGORIES_PATH, "r", encoding="utf-8") as f:
-        return f.read()
+    if os.path.exists(CATEGORIES_PATH):
+        try:
+            with open(CATEGORIES_PATH, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+    return json.dumps({
+        "categories": [
+            {"name": "Food & Dining", "subcategories": ["Groceries", "Restaurants", "Coffee", "Delivery", "Snacks"]},
+            {"name": "Transportation", "subcategories": ["Public Transit", "Fuel", "Taxi & Rideshare", "Parking", "Vehicle Maintenance"]},
+            {"name": "Housing", "subcategories": ["Rent", "Mortgage", "Maintenance & Repairs", "Furniture", "Supplies"]},
+            {"name": "Utilities", "subcategories": ["Electricity", "Water", "Gas", "Internet", "Mobile Phone"]},
+            {"name": "Entertainment", "subcategories": ["Movies & Streaming", "Games", "Events & Concerts", "Hobbies", "Subscriptions"]},
+            {"name": "Shopping", "subcategories": ["Clothing", "Electronics", "Home Goods", "Gifts"]},
+            {"name": "Healthcare", "subcategories": ["Doctor Visits", "Pharmacy & Medications", "Dental", "Insurance", "Fitness"]},
+            {"name": "Education", "subcategories": ["Books", "Courses & Tuition", "Supplies", "Software"]},
+            {"name": "Travel", "subcategories": ["Flights", "Lodging", "Car Rental", "Sightseeing", "Dining"]},
+            {"name": "Personal Care", "subcategories": ["Hair & Grooming", "Cosmetics", "Spa & Wellness"]},
+            {"name": "Miscellaneous", "subcategories": ["Fees & Charges", "Donations", "Other"]}
+        ]
+    }, indent=2)
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="0.0.0.0", port=8000)
